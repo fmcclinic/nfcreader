@@ -3,95 +3,159 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>FMC Clinic - NFC Reader</title>
+    <title>FMC Clinic - Raw NFC Reader</title>
     <style>
-        /* ... giữ nguyên phần style cũ ... */
-        .raw-data {
-            font-family: monospace;
-            word-break: break-all;
-            background: #f5f5f5;
-            padding: 10px;
-            margin-top: 10px;
-            border-radius: 4px;
+        body { 
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
         }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            line-height: 1.5;
+        }
+        #debug {
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>FMC Clinic - NFC Reader (Debug)</h1>
+        <h2>FMC NFC Reader (Debug)</h2>
+        <div>
+            <button onclick="startScan()">Quét NFC (Chế độ thường)</button>
+            <button onclick="startWatchingNFC()">Theo dõi NFC (Watch mode)</button>
         </div>
-
-        <button onclick="startNFC()">Quét NFC</button>
-        <div id="status">Nhấn nút để bắt đầu quét...</div>
+        <div id="status">Chọn chế độ quét...</div>
+        <div id="debug"></div>
     </div>
 
     <script>
-        function bytesToHexString(bytes) {
-            return Array.from(bytes)
-                .map(b => b.toString(16).padStart(2, '0'))
-                .join('');
+        const debug = document.getElementById('debug');
+        const status = document.getElementById('status');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            debug.innerHTML += `<div class="${type}">[${timestamp}] ${message}</div>`;
+            debug.scrollTop = debug.scrollHeight;
         }
 
-        async function startNFC() {
-            const status = document.getElementById('status');
-            
+        async function startScan() {
             if (!('NDEFReader' in window)) {
-                status.innerHTML = '<div class="error">Thiết bị không hỗ trợ Web NFC. Vui lòng sử dụng Chrome trên Android.</div>';
+                status.innerHTML = '<span class="error">Trình duyệt không hỗ trợ Web NFC</span>';
                 return;
             }
 
             try {
                 status.textContent = 'Đang khởi tạo NFC...';
+                log('Khởi tạo NDEFReader');
+                
                 const ndef = new NDEFReader();
                 await ndef.scan();
-                status.textContent = 'Đang đợi thẻ NFC... Vui lòng đặt CCCD lên điện thoại';
                 
-                ndef.addEventListener("reading", ({ message, serialNumber }) => {
-                    let output = `<div class="success">✓ Đã đọc thành công!</div>`;
-                    output += `<strong>Serial Number:</strong> ${serialNumber}<br>`;
-                    output += `<strong>Số records:</strong> ${message.records.length}<br><br>`;
+                status.textContent = 'Đang đợi thẻ NFC...';
+                log('Đang quét NFC');
 
-                    message.records.forEach((record, index) => {
-                        output += `<strong>Record ${index + 1}:</strong><br>`;
-                        output += `- Loại: ${record.recordType}<br>`;
-                        output += `- Encoding: ${record.encoding}<br>`;
-                        output += `- Lang: ${record.lang}<br>`;
-                        output += `- MediaType: ${record.mediaType}<br>`;
+                ndef.addEventListener("reading", (event) => {
+                    log('Phát hiện thẻ!', 'success');
+                    log(`Serial Number: ${event.serialNumber}`);
+                    
+                    event.message.records.forEach((record, index) => {
+                        log(`Record ${index + 1}:`);
+                        log(`- Type: ${record.recordType}`);
+                        log(`- Media Type: ${record.mediaType || 'N/A'}`);
                         
                         if (record.data) {
-                            const hexData = bytesToHexString(record.data);
-                            output += `<div class="raw-data">Raw data (hex): ${hexData}</div>`;
-                            
                             try {
-                                const textDecoder = new TextDecoder(record.encoding || 'utf-8');
-                                const textData = textDecoder.decode(record.data);
-                                output += `<div class="raw-data">Text data: ${textData}</div>`;
+                                // Thử decode UTF-8
+                                const utf8Data = new TextDecoder().decode(record.data);
+                                log(`- UTF8 Data: ${utf8Data}`);
+                                
+                                // Hiển thị hex
+                                const hexData = Array.from(record.data)
+                                    .map(b => b.toString(16).padStart(2, '0'))
+                                    .join(' ');
+                                log(`- HEX Data: ${hexData}`);
+                                
                             } catch (e) {
-                                output += `<div class="error">Không thể decode text: ${e.message}</div>`;
+                                log(`- Error decoding: ${e.message}`, 'error');
                             }
                         }
-                        output += '<br>';
                     });
 
-                    status.innerHTML = output;
+                    status.innerHTML = `<span class="success">Đã đọc xong! Xem log bên dưới</span>`;
                 });
 
                 ndef.addEventListener("error", (error) => {
-                    status.innerHTML = `<div class="error">Lỗi: ${error.message}</div>`;
+                    log(`Lỗi: ${error.message}`, 'error');
+                    status.innerHTML = `<span class="error">Lỗi: ${error.message}</span>`;
                 });
 
             } catch (error) {
-                status.innerHTML = `
-                    <div class="error">
-                        <strong>Lỗi:</strong> ${error.message}<br><br>
-                        Có thể do:<br>
-                        - NFC chưa được bật<br>
-                        - Chưa cấp quyền NFC cho trình duyệt<br>
-                        - Thiết bị không hỗ trợ NFC<br>
-                        - CCCD có thể sử dụng định dạng NFC đặc biệt
-                    </div>
-                `;
+                log(`Exception: ${error.message}`, 'error');
+                status.innerHTML = `<span class="error">Lỗi: ${error.message}</span>`;
+            }
+        }
+
+        async function startWatchingNFC() {
+            try {
+                const options = {
+                    recordType: "empty",  // Try to read any record type
+                    signal: (new AbortController()).signal
+                };
+
+                status.textContent = 'Đang theo dõi NFC events...';
+                log('Bắt đầu watch mode');
+
+                navigator.permissions.query({ name: "nfc" }).then((result) => {
+                    log(`NFC Permission: ${result.state}`);
+                });
+
+                const ndef = new NDEFReader();
+                await ndef.scan();
+
+                ndef.onreading = (event) => {
+                    log('NFC Event detected!', 'success');
+                    log(`Raw event data: ${JSON.stringify(event, null, 2)}`);
+                };
+
+                ndef.onreadingerror = (error) => {
+                    log(`Reading error: ${error}`, 'error');
+                };
+
+            } catch (error) {
+                log(`Watch mode error: ${error.message}`, 'error');
+                status.innerHTML = `<span class="error">Lỗi watch mode: ${error.message}</span>`;
             }
         }
     </script>
