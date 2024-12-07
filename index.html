@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FMC Clinic - NFC Reader</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #2196F3;
+            margin: 0;
+            font-size: 24px;
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #1976D2;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            line-height: 1.5;
+            background: #fff;
+        }
+        .error { 
+            color: #d32f2f;
+            padding: 10px;
+            background: #ffebee;
+            border-radius: 4px;
+        }
+        .success { 
+            color: #388e3c;
+            padding: 10px;
+            background: #e8f5e9;
+            border-radius: 4px;
+        }
+        .info {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>FMC Clinic - NFC Reader</h1>
+        </div>
+
+        <button onclick="startNFC()">Quét NFC</button>
+        <div id="status">Nhấn nút để bắt đầu quét...</div>
+
+        <div class="info">
+            Lưu ý:
+            <ul>
+                <li>Sử dụng Chrome trên Android</li>
+                <li>Bật NFC trên điện thoại</li>
+                <li>Đặt thẻ gần điện thoại khi quét</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function startNFC() {
+            const status = document.getElementById('status');
+            
+            if (!('NDEFReader' in window)) {
+                status.innerHTML = '<div class="error">Thiết bị không hỗ trợ Web NFC. Vui lòng sử dụng Chrome trên Android.</div>';
+                return;
+            }
+
+            try {
+                status.textContent = 'Đang khởi tạo NFC...';
+                const ndef = new NDEFReader();
+                await ndef.scan();
+                status.textContent = 'Đang đợi thẻ NFC... Vui lòng đặt CCCD lên điện thoại';
+                
+                ndef.addEventListener("reading", ({ message, serialNumber }) => {
+                    let messageContent = '';
+                    try {
+                        for (const record of message.records) {
+                            if (record.recordType === "text") {
+                                const textDecoder = new TextDecoder();
+                                messageContent += textDecoder.decode(record.data);
+                            }
+                        }
+                    } catch (e) {
+                        messageContent = 'Không đọc được nội dung';
+                    }
+
+                    status.innerHTML = `
+                        <div class="success">
+                            <strong>✓ Đã đọc thành công!</strong><br>
+                            <strong>Serial:</strong> ${serialNumber}<br>
+                            <strong>Nội dung:</strong> ${messageContent || 'Không có nội dung'}
+                        </div>
+                    `;
+                });
+
+                ndef.addEventListener("error", (error) => {
+                    status.innerHTML = `<div class="error">Lỗi: ${error.message}</div>`;
+                });
+
+            } catch (error) {
+                status.innerHTML = `
+                    <div class="error">
+                        <strong>Lỗi:</strong> ${error.message}<br><br>
+                        Có thể do:<br>
+                        - NFC chưa được bật<br>
+                        - Chưa cấp quyền NFC cho trình duyệt<br>
+                        - Thiết bị không hỗ trợ NFC
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
